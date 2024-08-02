@@ -7,11 +7,11 @@ class Client:
     chat_id = ''
     state = {}
 
-class record:
+class Record:
     date = ''
     time = ''
-    client_id = ''
-    info = ''
+    client_id = 0
+    info = 'Свободно'
 
 def get_column_names(table_name):
     if table_name == "client_info": return "id, client_name, phone_number, car_info, chat_id", "(%s, %s, %s, %s, %s)"
@@ -62,6 +62,13 @@ def transform_client_data(client):
     data.append(client.chat_id)
     return data
 
+def transform_record_data(record):
+    data = []
+    data.append(record.date)
+    data.append(record.time)
+    data.append(record.client_id)
+    data.append(record.info)
+    return data
 
 def update_client_row(client, field):
     connection = get_connection()
@@ -75,6 +82,26 @@ def update_client_row(client, field):
         cur.execute(sql_update_query, (client.car_info, client.chat_id))
 
     connection.commit()
+
+def delete_client(client):
+    try:
+        connection = get_connection()
+        cur = connection.cursor()
+        table_name = 'client_info'
+        column_names = get_column_names(table_name)
+        delete_query = f"""DELETE FROM {table_name}
+                    WHERE chat_id = {client.chat_id}
+                    """
+        cur.execute(delete_query)
+        connection.commit()
+        return True
+    except Exception as e:
+        connection.rollback()
+        print("Произошла ошибка:", e)
+        return False
+    finally:
+        cur.close()
+        connection.close()
 
 def delete_row_by_id(table_name, data):
     try:
@@ -95,15 +122,15 @@ def delete_row_by_id(table_name, data):
         cur.close()
         connection.close()
 
-def delete_by_date_time(table_name, data):
+def delete_by_date_time(date, time):
     try:
         connection = get_connection()
         cur = connection.cursor()
-        column_names = get_column_names(table_name)
+        table_name = 'register_days'
         delete_query = f"""DELETE FROM {table_name}
-                    WHERE date = '{data[0]}' AND time = '{data[1]}'
+                    WHERE date = '{date}' AND time = '{time}'
                     """
-        cur.execute(delete_query, data)
+        cur.execute(delete_query)
         connection.commit()
         return True
     except Exception as e:
@@ -171,53 +198,68 @@ def get_all_dates():
         dates.append(date)
     return dates
 
-def validate_date(data):
+def validate_date(date, time):
+    if len(date) == len(time) == 5:
+        if date[2] == '.':
+            month = date.split('.')[1]
+            day = date.split('.')[0]
+            if not(1 <= int(month) <= 12 and len(month) == 2): return False
+            if not(1 <= int(day) <= 31 and len(day) == 2): return False
+        else: return False
+
+        if time[2] == '-':
+            str = time[:2]
+            str += ':'
+            str += time[3:]
+            time = str
+
+        if time[2] == ':':
+            hour = time.split(':')[0]
+            min = time.split(':')[1]
+            if not(1 <= int(hour) <= 23 and len(hour) == 2): return False
+            if not(0 <= int(min) <= 59 and len(min) == 2): return False
+        else: return False
+        return True
+    return False
+
+def form_record(date, time):
+    record = Record
+    record.date = date
+    record.time = time
+    return record
+
+def search_similar_records(record):
+    rows = get_all_date_table()
+    for row in rows:
+        if row[1] == record.date and row[2] == record.time:
+            return True
+            break
+    return False
+
+
+def add_records(data):
+    data = data.split(' ')
     date = data[0]
-    f1 = f2 = 0
-    if date[2] == '.':
-        month = date.split('.')[1]
-        day = date.split('.')[0]
-        if not(1 <= int(month) <= 12 and len(month) == 2): return False
-        if not(1 <= int(day) <= 31 and len(day) == 2): return False
-    else: return False
-
-    time = data[1]
-    if time[2] == ':':
-        hour = time.split(':')[0]
-        min = time.split(':')[1]
-        if not(1 <= int(hour) <= 23 and len(hour) == 2): return False
-        if not(0 <= int(min) <= 59 and len(min) == 2): return False
-    else: return False
-    return True
-
-def transform_date_to_add(date):
-    date = date.split(' ')
-    data = []
-    for i in range(1, len(date)):
-        a = []
-        a.append(date[0])
-        a.append(date[i])
-        if not(validate_date(a)): return False
-        a.append(0)
-        a.append('Свободно')
-        data.append(a)
-    return data
-
-def transform_date_to_delete(date):
-    date = date.split(' ')
-    data = []
-    for i in range(1, len(date)):
-        data.append(date[0])
-        data.append(date[i])
-        if not(validate_date(data)): return False
-    return data
-
-def add_rows(table_name, data):
-    for i in range(0,len(data)):
-        func = add_row(table_name, data[i])
-        if not func:
-            return False
-    return True
+    f = 0
+    for i in range(1, len(data)):
+        time = data[i]
+        if validate_date(date, time):
+            if time[2] == '-':
+                str = time[:2]
+                str += ':'
+                str += time[3:]
+                time = str
+            record = form_record(date, time)
+            if search_similar_records(record):
+                return 'Запись уже была добавлена'
+            else:
+                f = 1
+                row = transform_record_data(record)
+                add_row('register_days', row)
+        else:
+            return 'Запись введена некорректно. Попробуйте еще раз'
+    if f == 1:
+        return 'Запись добавлена успешно'
 
 def dates_to_watch():
     data = []
@@ -245,13 +287,45 @@ def dates_to_watch():
         data.append(a)
     return data
 
-def check_date_in_table(dates):
-    table = get_all_date_table()
-    for date in dates:
-        day = date[0]
-        time = date[1]
-        for row in table:
-            if row[1] == day and row[2] == time:
-                return False
-    return True
+def check_date_in_table(date):
+    rows = get_all_date_table()
+    f = False
+    for row in rows:
+        if row[1] == date:
+            f = True
+    return f
 
+def check_record_in_table(date, time):
+    rows = get_all_date_table()
+    f = False
+    for row in rows:
+        if row[1] == date and row[2] == time:
+            f = True
+    return f
+
+def quick_sort_dates(dates):
+    if len(dates) <= 1:
+        return dates
+    else:
+        pivot = dates[0]
+        less = [date for date in dates[1:] if compare_dates(date, pivot)]
+        greater = [date for date in dates[1:] if not compare_dates(date, pivot)]
+        return quick_sort_dates(less) + [pivot] + quick_sort_dates(greater)
+
+def compare_dates(date1, date2):
+    day1, month1 = map(int, date1.split('.'))
+    day2, month2 = map(int, date2.split('.'))
+
+    if month1 < month2:
+        return True
+    elif month1 == month2:
+        return day1 < day2
+    else:
+        return False
+
+def get_dates():
+    rows = get_all_date_table()
+    dates = []
+    for row in rows:
+        dates.append(row[1])
+    return quick_sort_dates(dates)
