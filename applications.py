@@ -1,7 +1,20 @@
 import psycopg2
 
+class Client:
+    client_name = ''
+    phone_number = ''
+    car_info = ''
+    chat_id = ''
+    state = {}
+
+class record:
+    date = ''
+    time = ''
+    client_id = ''
+    info = ''
+
 def get_column_names(table_name):
-    if table_name == "client_info": return "id, client_name, phone_number, car_info", "(%s, %s, %s, %s)"
+    if table_name == "client_info": return "id, client_name, phone_number, car_info, chat_id", "(%s, %s, %s, %s, %s)"
     return "id, date, time, client_id, info", "(%s, %s, %s, %s, %s)"
 
 def get_connection():
@@ -40,6 +53,28 @@ def add_row(table_name, data):
     finally:
         cur.close()
         connection.close()
+
+def transform_client_data(client):
+    data = []
+    data.append(client.client_name)
+    data.append(client.phone_number)
+    data.append(client.car_info)
+    data.append(client.chat_id)
+    return data
+
+
+def update_client_row(client, field):
+    connection = get_connection()
+    cur = connection.cursor()
+    sql_update_query = f"""Update {'client_info'} set {field} = %s where {'chat_id'} = %s"""
+    if field == "client_name":
+        cur.execute(sql_update_query, (client.client_name, client.chat_id))
+    elif field == "phone_number":
+        cur.execute(sql_update_query, (client.phone_number, client.chat_id))
+    elif field == "car_info":
+        cur.execute(sql_update_query, (client.car_info, client.chat_id))
+
+    connection.commit()
 
 def delete_row_by_id(table_name, data):
     try:
