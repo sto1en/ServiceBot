@@ -5,6 +5,7 @@ import re
 
 bot = telebot.TeleBot('6636078377:AAHY_bT6ebzOacyg7o4fFjbaPed8vVMbTKY')
 client = applications.Client
+record = applications.Record
 admin_state = {}
 
 
@@ -63,12 +64,14 @@ def response(function_call):
             if f == 0:
                 text = 'Вы не зарегистрированы!'
                 client.state[function_call.message.chat.id] = 'log_in'
-            markup = telebot.types.InlineKeyboardMarkup(row_width = 3)
+            markup = telebot.types.InlineKeyboardMarkup(row_width = 2)
             button_register = telebot.types.InlineKeyboardButton(text = "Регистрация", callback_data="client_register")
             button_correct = telebot.types.InlineKeyboardButton(text = "Изменить информацию", callback_data="client_correct")
+            button_record = telebot.types.InlineKeyboardButton(text = "Записи на обслуживание", callback_data="see_records")
             button_delete = telebot.types.InlineKeyboardButton(text = "Удалить данные", callback_data="client_delete")
             button_back = telebot.types.InlineKeyboardButton(text="Назад", callback_data='menu')
-            markup.add(button_register, button_correct, button_delete)
+            markup.add(button_register, button_correct, button_record)
+            markup.add(button_delete)
             markup.add(button_back)
             bot.send_message(function_call.message.chat.id, text, reply_markup=markup)
 
@@ -143,6 +146,137 @@ def response(function_call):
             button_back = telebot.types.InlineKeyboardButton(text='Назад', callback_data='account')
             markup.add(button_back)
             bot.send_message(function_call.message.chat.id, text, reply_markup=markup)
+
+        #Записи в личном кабинете
+        elif function_call.data == "see_records":
+            client.state[function_call.message.chat.id] = 'see_my_records'
+            client.chat_id = function_call.from_user.id
+            text = 'Ваши записи. Нажмите, чтобы посмотреть полную информацию'
+            markup = telebot.types.InlineKeyboardMarkup(row_width = 4)
+            buttons = []
+            for row in applications.get_client_records(client):
+                rec = row[0] + ' ' + row[1]
+                button = telebot.types.InlineKeyboardButton(text = rec, callback_data = f'see_record_{rec}_{row[2]}')
+                buttons.append(button)
+
+            for i in range(0, len(buttons), 4):
+                markup.row(*buttons[i:i + 4])
+
+            button_back = telebot.types.InlineKeyboardButton(text="Назад", callback_data='account')
+            markup.add(button_back)
+            bot.send_message(function_call.message.chat.id, text, reply_markup = markup)
+
+        elif function_call.data.split('_')[:2] == ["see", "record"]:
+            client.state[function_call.message.chat.id] = 'see_my_record'
+            client.chat_id = function_call.from_user.id
+            rec = function_call.data.split('_')[2]
+            info = function_call.data.split('_')[3]
+            record.date = rec.split(' ')[0]
+            record.time = rec.split(' ')[1]
+            text = f'Запись на {rec}, {info}'
+            markup = telebot.types.InlineKeyboardMarkup(row_width = 2)
+            button_change = telebot.types.InlineKeyboardButton(text="Изменить доп информацию", callback_data = f'change_record')
+            button_delete = telebot.types.InlineKeyboardButton(text="Удалить запись", callback_data = f'remove_record')
+            markup.add(button_change)
+            markup.add(button_delete)
+            bot.send_message(function_call.message.chat.id, text, reply_markup = markup)
+
+        elif function_call.data == "remove_record":
+            client.state[function_call.message.chat.id] = 'remove_my_record'
+            text = "Вы хотите отменить запись?"
+            markup = telebot.types.InlineKeyboardMarkup()
+            button_confirm = telebot.types.InlineKeyboardButton(text = "Подтвердить", callback_data = "remove_confirm")
+            button_back = telebot.types.InlineKeyboardButton(text="Назад", callback_data='see_records')
+            markup.add(button_confirm)
+            markup.add(button_back)
+            bot.send_message(function_call.message.chat.id, text, reply_markup = markup)
+
+        elif function_call.data == "remove_confirm":
+            client.state[function_call.message.chat.id] = 'removed_my_record'
+            client.chat_id = function_call.from_user.id
+            applications.update_record(record, "client_id", 0)
+            applications.update_record(record, "info", "Свободно")
+            text = "Запись отменена"
+            markup = telebot.types.InlineKeyboardMarkup()
+            button_back = telebot.types.InlineKeyboardButton(text="Назад", callback_data='see_records')
+            markup.add(button_back)
+            bot.send_message(function_call.message.chat.id, text, reply_markup=markup)
+
+        elif function_call.data == "change_record":
+            client.state[function_call.message.chat.id] = 'change_my_record'
+            text = "Напишите дополнительную информацию о необходимом обслуживании"
+            bot.send_message(function_call.message.chat.id, text)
+
+        #Запись на обслуживание
+        elif function_call.data == "service":
+            client.state[function_call.message.chat.id] = 'service'
+            text = 'Выберите дату для записи'
+            markup = telebot.types.InlineKeyboardMarkup(row_width=7)
+            dates = []
+            rows = applications.get_all_date_table()
+            for row in rows:
+                if row[3] == 0:
+                    dates.append(row[1])
+            dates = applications.quick_sort_dates(dates)
+            buttons = []
+            button_date = telebot.types.InlineKeyboardButton(text=dates[0], callback_data='service_date_' + dates[0])
+            buttons.append(button_date)
+            for i in range(1, len(dates)):
+                date = dates[i]
+                if date != dates[i - 1]:
+                    button_date = telebot.types.InlineKeyboardButton(text=date, callback_data='service_date_' + date)
+                    buttons.append(button_date)
+
+            for i in range(0, len(buttons), 7):
+                markup.row(*buttons[i:i + 7])
+            button_back = telebot.types.InlineKeyboardButton(text = "Назад", callback_data = 'menu')
+            markup.add(button_back)
+            bot.send_message(function_call.message.chat.id, text, reply_markup=markup)
+
+        elif function_call.data.split('_')[:2] == ['service', 'date']:
+            date = function_call.data.split('_')[2]
+            markup = telebot.types.InlineKeyboardMarkup(row_width=7)
+            if applications.is_busy_date(date):
+                text = f'Выберите время записи на {date}'
+                rows = applications.get_all_date_table()
+                buttons = []
+                for i in range(1, len(rows)):
+                    date_i = rows[i][1]
+                    time = rows[i][2]
+                    if date_i == date and rows[i][3] == 0:
+                        button_time = telebot.types.InlineKeyboardButton(text=time,
+                                                                   callback_data='service_time_' + time + '_' + date)
+                        buttons.append(button_time)
+
+                for i in range(0, len(buttons), 7):
+                    markup.row(*buttons[i:i + 7])
+            else:
+                text = 'Эта дата уже занята'
+                button = telebot.types.InlineKeyboardButton(text='Назад', callback_data=f'service')
+                markup.add(button)
+            bot.send_message(function_call.message.chat.id, text, reply_markup=markup)
+
+        elif function_call.data.split('_')[:2] == ['service', 'time']:
+            client.state[function_call.message.chat.id] = 'writing_info'
+            date = function_call.data.split('_')[3]
+            time = function_call.data.split('_')[2]
+            record.date = date
+            record.time = time
+            text = f'Напишите дополнительную информацию о необходимом обслуживании'
+            bot.send_message(function_call.message.chat.id, text)
+
+        elif function_call.data == 'service_record':
+            client.chat_id = function_call.from_user.id
+            if applications.check_record_in_table(record.date, record.time):
+                applications.date_sign(record.date, record.time, client.chat_id, record.info)
+                text = 'Вы записаны успешно'
+            else:
+                text = 'Запись уже занята'
+            markup = telebot.types.InlineKeyboardMarkup()
+            button_back = telebot.types.InlineKeyboardButton(text='Назад', callback_data='menu')
+            markup.add(button_back)
+            bot.send_message(function_call.message.chat.id, text, reply_markup=markup)
+
 
         #Меню администратора
         elif function_call.data == "admin_menu":
@@ -228,7 +362,7 @@ def response(function_call):
             time = function_call.data.split('_')[1]
             date = function_call.data.split('_')[2]
             if applications.check_record_in_table(date, time):
-                text = 'Нажмите на кнопку, чтобы удалить'
+                text = f'Вы выбрали {date} {time} для удаления'
                 button= telebot.types.InlineKeyboardButton(text='Подтвердить', callback_data=f'delete_{date}_{time}')
             else:
                 text = 'Эта запись уже удалена'
@@ -309,6 +443,20 @@ def get_text_messages(message):
         button_back = telebot.types.InlineKeyboardButton(text="Назад", callback_data='account')
         markup.add(button_back)
         bot.send_message(message.chat.id, text, reply_markup=markup)
+
+    elif client.state.get(message.chat.id) == "writing_info":
+        if applications.is_busy_record(record.date, record.time):
+            record.info = message.text
+            text = f'Вы выбрали {record.date} {record.time}: {record.info}'
+            button = telebot.types.InlineKeyboardButton(text='Подтвердить',
+                                                        callback_data=f'service_record')
+        else:
+            text = 'Эта запись уже занята'
+            button = telebot.types.InlineKeyboardButton(text='Назад', callback_data=f'service')
+        markup = telebot.types.InlineKeyboardMarkup()
+        markup.add(button)
+        bot.send_message(message.chat.id, text, reply_markup=markup)
+
     #Конец регистрации
 
     #Изменения одного поля
@@ -344,6 +492,16 @@ def get_text_messages(message):
         text = "Информация о машине изменена"
         markup = telebot.types.InlineKeyboardMarkup()
         button_back = telebot.types.InlineKeyboardButton(text='Назад', callback_data='account')
+        markup.add(button_back)
+        bot.send_message(message.chat.id, text, reply_markup=markup)
+
+    elif client.state.get(message.chat.id) == "change_my_record":
+        client.state[message.chat.id] = 'changed_my_record'
+        client.car_info = message.text
+        applications.update_record(record, "info", message.text)
+        text = "Дополнительная информация изменена"
+        markup = telebot.types.InlineKeyboardMarkup()
+        button_back = telebot.types.InlineKeyboardButton(text='Назад', callback_data='see_records')
         markup.add(button_back)
         bot.send_message(message.chat.id, text, reply_markup=markup)
 

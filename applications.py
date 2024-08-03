@@ -83,6 +83,13 @@ def update_client_row(client, field):
 
     connection.commit()
 
+def update_record(record, field, value):
+    connection = get_connection()
+    cur = connection.cursor()
+    sql_update_query = f"""Update {'register_days'} set {field} = %s where {'date'} = %s and {'time'} = %s"""
+    cur.execute(sql_update_query, (value, record.date, record.time))
+    connection.commit()
+
 def delete_client(client):
     try:
         connection = get_connection()
@@ -329,3 +336,45 @@ def get_dates():
     for row in rows:
         dates.append(row[1])
     return quick_sort_dates(dates)
+
+def date_sign(date, time, chat_id, info):
+    rows = get_all_client_table()
+    client_id = 0
+    for row in rows:
+        if row[4] == chat_id:
+            client_id = row[0]
+    connection = get_connection()
+    cur = connection.cursor()
+    sql_update_query = f"""Update {'register_days'} set {'client_id'} = %s, {'info'} = %s where {'date'} = %s and {'time'} = %s"""
+    cur.execute(sql_update_query, (client_id, info, date, time))
+    connection.commit()
+
+def is_busy_record(date, time):
+    rows = get_all_date_table()
+    for row in rows:
+        if row[1] == date and row[2] == time and row[3] != 0:
+            return False
+    return True
+
+def is_busy_date(date):
+    rows = get_all_date_table()
+    f = 0
+    for row in rows:
+        if row[1] == date and row[3] == 0:
+            return True
+    return False
+
+def get_client_records(client):
+    rows = get_all_client_table()
+    client_id = 0
+    data = []
+    for row in rows:
+        if row[4] == client.chat_id:
+            client_id = row[0]
+    rows = get_all_date_table()
+    i = 1
+    for row in rows:
+        if row[3] == client_id:
+            data.append([row[1], row[2], row[4]])
+            i += 1
+    return data
