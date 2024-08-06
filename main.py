@@ -177,8 +177,10 @@ def response(function_call):
             markup = telebot.types.InlineKeyboardMarkup(row_width = 2)
             button_change = telebot.types.InlineKeyboardButton(text="Изменить доп информацию", callback_data = f'change_record')
             button_delete = telebot.types.InlineKeyboardButton(text="Удалить запись", callback_data = f'remove_record')
+            button_back = telebot.types.InlineKeyboardButton(text="Назад", callback_data='see_records')
             markup.add(button_change)
             markup.add(button_delete)
+            markup.add(button_back)
             bot.send_message(function_call.message.chat.id, text, reply_markup = markup)
 
         elif function_call.data == "remove_record":
@@ -346,7 +348,6 @@ def response(function_call):
                     date_i = rows[i][1]
                     time = rows[i][2]
                     if date_i == date:
-                        print(date, date_i, rows[i])
                         button_time = telebot.types.InlineKeyboardButton(text=time, callback_data='time_' + time + '_' + date)
                         buttons.append(button_time)
 
@@ -394,7 +395,18 @@ def handle_contact(message):
 
 @bot.message_handler(commands = ['admin'])
 def AdminBot(message):
-    if message.from_user.id == 866916563:
+    if message.from_user.id == 866916563 or message.from_user.id == 137733903:
+        admin_state[message.chat.id] = "menu"
+        text = "Меню"
+        markup = telebot.types.InlineKeyboardMarkup(row_width = 2)
+        button_info = telebot.types.InlineKeyboardButton(text = 'Добавить дату', callback_data = 'add_date')
+        button_register = telebot.types.InlineKeyboardButton(text = 'Удалить дату', callback_data = 'delete_date')
+        markup.add(button_info, button_register)
+        bot.send_message(message.chat.id, text, reply_markup = markup)
+
+@bot.message_handler(commands = ['superadmin'])
+def SuperAdminBot(message):
+    if message.from_user.id == 866916563 or message.from_user.id == 137733903:
         admin_state[message.chat.id] = "menu"
         text = "Меню"
         markup = telebot.types.InlineKeyboardMarkup(row_width = 2)
@@ -404,7 +416,6 @@ def AdminBot(message):
         button_register = telebot.types.InlineKeyboardButton(text = 'Удалить дату', callback_data = 'delete_date')
         markup.add(button_client, button_date, button_info, button_register)
         bot.send_message(message.chat.id, text, reply_markup = markup)
-
 
 @bot.message_handler(content_types = ['text'])
 def get_text_messages(message):
