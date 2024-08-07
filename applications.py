@@ -1,10 +1,10 @@
 import psycopg2
 
 class Client:
+    id = 0
     client_name = ''
     phone_number = ''
     car_info = ''
-    chat_id = ''
     state = {}
 
 class Record:
@@ -13,8 +13,20 @@ class Record:
     client_id = 0
     info = 'Свободно'
 
+def get_bot_api():
+    file_api = open('bot_api')
+    API = file_api.readline()
+    return API
+
+def get_admins():
+    with open('admins_id') as file:
+        admins = []
+        for line in file:
+            admins.append(int(line))
+    return admins
+
 def get_column_names(table_name):
-    if table_name == "client_info": return "id, client_name, phone_number, car_info, chat_id", "(%s, %s, %s, %s, %s)"
+    if table_name == "client_info": return "id, client_name, phone_number, car_info", "(%s, %s, %s, %s)"
     return "id, date, time, client_id, info", "(%s, %s, %s, %s, %s)"
 
 def get_connection():
@@ -29,13 +41,14 @@ def add_row(table_name, data):
     try:
         connection = get_connection()
         cur = connection.cursor()
-        cur.execute(f"""SELECT * FROM {table_name}""")
-        rows = cur.fetchall()
         row = []
-        if len(rows) != 0:
-            id = rows[len(rows) - 1][0] + 1
-        else: id = 1
-        row.append(id)
+        if table_name == 'register_days':
+            cur.execute(f"""SELECT * FROM {table_name}""")
+            rows = cur.fetchall()
+            if len(rows) != 0:
+                id = rows[len(rows) - 1][0] + 1
+            else: id = 1
+            row.append(id)
         row += data
 
         column_names = get_column_names(table_name)
@@ -56,10 +69,10 @@ def add_row(table_name, data):
 
 def transform_client_data(client):
     data = []
+    data.append(client.id)
     data.append(client.client_name)
     data.append(client.phone_number)
     data.append(client.car_info)
-    data.append(client.chat_id)
     return data
 
 def transform_record_data(record):
@@ -73,14 +86,13 @@ def transform_record_data(record):
 def update_client_row(client, field):
     connection = get_connection()
     cur = connection.cursor()
-    sql_update_query = f"""Update {'client_info'} set {field} = %s where {'chat_id'} = %s"""
+    sql_update_query = f"""Update {'client_info'} set {field} = %s where {'id'} = %s"""
     if field == "client_name":
-        cur.execute(sql_update_query, (client.client_name, client.chat_id))
+        cur.execute(sql_update_query, (client.client_name, client.id))
     elif field == "phone_number":
-        cur.execute(sql_update_query, (client.phone_number, client.chat_id))
+        cur.execute(sql_update_query, (client.phone_number, client.id))
     elif field == "car_info":
-        cur.execute(sql_update_query, (client.car_info, client.chat_id))
-
+        cur.execute(sql_update_query, (client.car_info, client.id))
     connection.commit()
 
 def update_record(record, field, value):
@@ -97,7 +109,7 @@ def delete_client(client):
         table_name = 'client_info'
         column_names = get_column_names(table_name)
         delete_query = f"""DELETE FROM {table_name}
-                    WHERE chat_id = {client.chat_id}
+                    WHERE id = {client.id}
                     """
         cur.execute(delete_query)
         connection.commit()
@@ -337,12 +349,8 @@ def get_dates():
         dates.append(row[1])
     return quick_sort_dates(dates)
 
-def date_sign(date, time, chat_id, info):
+def date_sign(date, time, client_id, info):
     rows = get_all_client_table()
-    client_id = 0
-    for row in rows:
-        if row[4] == chat_id:
-            client_id = row[0]
     connection = get_connection()
     cur = connection.cursor()
     sql_update_query = f"""Update {'register_days'} set {'client_id'} = %s, {'info'} = %s where {'date'} = %s and {'time'} = %s"""
@@ -365,16 +373,24 @@ def is_busy_date(date):
     return False
 
 def get_client_records(client):
-    rows = get_all_client_table()
-    client_id = 0
     data = []
-    for row in rows:
-        if row[4] == client.chat_id:
-            client_id = row[0]
     rows = get_all_date_table()
     i = 1
     for row in rows:
-        if row[3] == client_id:
+        if row[3] == client.id:
             data.append([row[1], row[2], row[4]])
             i += 1
     return data
+
+def get_client_info(client):
+    rows = get_all_client_table()
+    for row in rows:
+        if row[0] == client.id:
+            text = ''
+            text += 'Имя: ' + row[1] + '\n'
+            text += 'Номер телефона: ' + row[2] + '\n'
+            text += 'Машина: ' + row[3] + '\n'
+            break
+        else:
+            text = 'Вы не зарегистрированы!'
+    return text
