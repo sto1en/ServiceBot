@@ -3,10 +3,13 @@ import applications
 from telebot import types
 import re
 
-bot = telebot.TeleBot('6636078377:AAHY_bT6ebzOacyg7o4fFjbaPed8vVMbTKY')
+api_file = open('bot_api')
+API = api_file.readline()
+bot = telebot.TeleBot(API)
 client = applications.Client
 record = applications.Record
 admin_state = {}
+
 
 
 @bot.message_handler(commands = ['start'])
